@@ -1,0 +1,6 @@
+image_prompt = """
+"Minimalist beige infographic, art cartoon style, soft neutral palette, clean layout with icons"
+"Create a single, clear visual concept representing the following content. "
+"Content: The convention of a full circle having 360 degrees is not based on an inherent geometric property but rather a historical artifact, primarily attributed to ancient Babylonian astronomers and mathematicians. "
+"If you include text, keep it short and readable."
+"""
