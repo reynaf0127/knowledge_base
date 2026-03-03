@@ -1,7 +1,9 @@
 ## general setup
 ### 1. common.py: store general variables
 ### 2. find_list.py: grab staging db book list and topic lsit to summary and to answer
-
+### 3. tag_list.py: find related tags
+### 4. generate_topic.py: LLM generated 2 topics for each tag
+### 5. write_topic_md.py: write topics into stage db topic md files -> loop back find_list
 
 ## branch workflow
 ### question topics

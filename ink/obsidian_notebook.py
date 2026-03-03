@@ -42,5 +42,5 @@ def generate_obsidian_notes_from_df(df: pd.DataFrame, output_dir: Path):
 
 # Example usage:
 if __name__ == "__main__":
-    df = pd.read_csv("topic_answers.csv")
+    df = pd.read_csv("topic_filenames.csv")
     generate_obsidian_notes_from_df(df, OBSIDIAN_VAULT)

@@ -1,7 +1,6 @@
 from book_summary import build_book_dataframe
 from question_answer import build_answer_dataframe
-from find_list import books,topics
-import pandas as pd
+from find_list import books,topics,topics_filename
 
 
 def is_non_empty_list(x) -> bool:
@@ -24,3 +23,11 @@ if __name__ == "__main__":
         print(f"✅ Saved topic_answers.csv ({len(df_topics)} rows)")
     else:
         print("⏭️ Skipping topic answers: topic_titles is empty or None")
+
+    # Topic filenames list
+    if is_non_empty_list(topics_filename):
+        df_topics_file = build_answer_dataframe(topics_filename)
+        df_topics_file.to_csv("topic_filenames.csv", index=False)
+        print(f"✅ Saved topic_filenames.csv ({len(df_topics_file)} rows)")
+    else:
+        print("⏭️ Skipping topic filenames: topic_filenames is empty or None")
