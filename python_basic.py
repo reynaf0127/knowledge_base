@@ -87,6 +87,11 @@ partners = postmates_partners[
     postmates_partners["name"].str.contains("pizza", case=False)
 ][["id", "name"]]
 
+# create a column with case when / if condition
+allstate_homework['complete_homework'] = allstate_homework['homework_id'].where(allstate_homework['grade'].notnull)
+
+# contains 10 digit numbers
+filter_df = customer_responses[customer_responses['customer_response'].str.contains(r'\b\d{10}\b',na=False)]
 
 # ============================================================
 # 3. CREATE OR MODIFY COLUMNS
@@ -135,7 +140,11 @@ df = df.fillna(0)
 df["score"] = df["score"].fillna(df["score"].median())
 
 airbnb_search_details["review_scores_rating"].notna()
+# string fill null values
+user_flags['name'] = user_flags['user_firstname'].fillna(na) + ' ' + user_flags['user_lastname'].fillna('na')
 
+# total columns with null values
+result = user_flags[user_flags.isnull().sum(axis=1)>1]
 
 # ============================================================
 # 5. SORT, UNIQUE, DUPLICATES
@@ -273,6 +282,24 @@ result = doordash_delivery[
     doordash_delivery["customer_placed_order_datetime"].between("2020-05-01", "2020-05-31")
 ].groupby("restaurant_id")["order_total"].sum().to_frame("total_order").reset_index()
 
+redfin_call_tracking[redfin_call_tracking['created_on'].dt.hour.between(15,18)]
+
+merge_df['weekday'] = (merge_df['signup_start_date'].dt.weekday + 1) % 7 #sunday as 0, by default python Monady as 0
+
+doordash_delivery['weekday'] = doordash_delivery['customer_placed_order_datetime'].dt.day_name() # Monday, Tuesday, ......
+
+# add xx days to date
+fb_blocked_users['block_end_date'] = fb_blocked_users['block_date'] + pd.to_timedelta(fb_blocked_users['block_duration'], unit='D')
+
+# format date timestamp to date
+order_details['date'] = order_details['order_timestamp'].dt.date
+
+# convert month to str when using isin
+group_df[group_df['month'].astype(str).isin(['2020-12','2021-01'])][['account_id','retention_rate']].drop_duplicates()
+
+# month difference using lambda
+group_df['diff'] = (group_df['month'] - group_df['prev_month'].fillna(group_df['month'])).apply(lambda x: x.n)
+group_df[group_df['diff']==1]['driver_id'].drop_duplicates()
 
 # ============================================================
 # 9. WINDOW-STYLE OPERATIONS
@@ -297,6 +324,9 @@ df["rev_diff"] = df["revenue"] - df["prev_revenue"]
 df["rank"] = df.groupby("campaign")["revenue"].rank(method="dense", ascending=False)
 df["cum_rev"] = df.sort_values("date").groupby("campaign")["revenue"].cumsum()
 
+# rolling average
+result_df['cum_avg'] = result_df['total_sales'].cumsum() / result_df['month']
+
 # Dense rank example.
 shipment_rank = (
     amazon_shipment.groupby("shipment_id")["weight"]
@@ -305,6 +335,29 @@ shipment_rank = (
 )
 shipment_rank["rank"] = shipment_rank["total_weight"].rank(method="dense", ascending=False)
 result = shipment_rank[shipment_rank["rank"] == 3][["shipment_id", "total_weight"]]
+result = fact_events[fact_events['client_id'] == 'mobile'].groupby('customer_id')['event_id'].count().reset_index().sort_values(by='event_id',ascending=True)
+result['rank'] = result['event_id'].rank(method='dense',ascending=True)
+result[result['rank']<=2][['customer_id','event_id']]
+
+# shift all rows in window function
+uber_employees = uber_employees.sort_values('hire_date')
+uber_employees['prev_hire_date'] = uber_employees['hire_date'].shift(1)
+uber_employees = uber_employees.sort_values('termination_date')
+uber_employees['prev_terminate_date'] = uber_employees['termination_date'].shift(1)
+uber_employees['days_prev_hire'] = (uber_employees['hire_date'] - uber_employees['prev_hire_date']).dt.days
+uber_employees['days_prev_terminate'] = (uber_employees['termination_date'] - uber_employees['prev_terminate_date']).dt.days
+result = pd.DataFrame({
+    'max_hire':[uber_employees['days_prev_hire'].max()],
+    'max_fire':[uber_employees['days_prev_terminate'].max()]
+})
+
+result_df = pd.DataFrame(
+    {
+        'shortest_count':[min_count],
+        'longest_count':[max_count],
+        'duration':[result]
+    }
+    )
 
 # Max value per group with transform.
 worker_logins["most_recent_login"] = (
@@ -319,6 +372,17 @@ result["prev_rate"] = result.groupby("source_currency")["exchange_rate"].shift(1
 result["change"] = result["exchange_rate"] - result["prev_rate"]
 final = result[result["month"] == "2020-07"][["source_currency", "change"]]
 
+# window no group by on all rows
+df = linkedin_customers.merge(linkedin_city,left_on='city_id',right_on='id',how='inner').merge(linkedin_country,left_on='country_id',right_on='id',how='inner')
+df['city_average'] = df.groupby('city_id')['id_x'].transform('nunique')
+mean_val = df.loc[df['city_average']>=1,'city_average'].mean()
+df['all_average'] = mean_val
+
+# window function on all rows, no transform (transform must use with groupby)
+filter_df['total_customer'] = filter_df['customer_id'].nunique()
+
+# backward fill & forward fill bfill() ffill() 'col': [None, None, 3, None, 5] -> bfill [3,3,3,5,5]
+sf_events['break_session'] = sf_events['if_break'].ffill()
 
 # ============================================================
 # 10. PERCENT CHANGE, FIRST/LAST, IDXMAX
@@ -395,7 +459,29 @@ counts = counts.rename(
         "viewer": "viewing_sessions",
     }
 )
+# unstack is easier to manipulate
+result = uber_orders.groupby(['service_name','if_complete'])[['number_of_orders','monetary_value']].sum().unstack(fill_value=0).reset_index()
 
+# rename columns
+pivot_df.columns = ['country','dec','jan']
+
+# create one row per employee per workday
+# create column like ['2021-01','2021-02',...]
+uber_employees['work_date'] = uber_employees.apply(
+    lambda x: pd.date_range(
+        start = x['hire_date'],
+        end = x['end_date'] - pd.to_timedelta(1,unit='D')
+        ),
+    axis=1
+    )
+# explode [x1,x2,x3] column into multiple rows 
+expand = uber_employees[['id','work_date']].explode('work_date')
+daily_count = expand.groupby('work_date')['id'].nunique().reset_index(name='daily_employee')
+result_df = expand.merge(daily_count,on='work_date')
+result_df['greatest'] = result_df.groupby('id')['daily_employee'].transform('max')
+result_df['reach_date'] = result_df['work_date'].where(result_df['daily_employee']==result_df['greatest'])
+result_df['rank_reach'] = result_df.groupby('id')['reach_date'].rank()
+result_df[result_df['rank_reach']==1][['id','greatest','work_date']].drop_duplicates()
 
 # ============================================================
 # 13. TEXT CLEANING AND EXPLODE
@@ -413,7 +499,17 @@ df_explode[
     (df_explode["amenities_clean"].str.contains("parking", case=False, na=False))
     & (df_explode["cleaning_fee"] == False)
 ]["neighbourhood"].unique()
+# concat two columns together
+wfm_transactions['customer_transaction'] = wfm_transactions['customer_id'].astype(str) + '-' + wfm_transactions['transaction_id'].astype(str)
 
+# concat two dataframes
+df = pd.concat([marathon_male,marathon_female])
+
+# smaller value of columns
+whatsapp_messages['small_user'] = whatsapp_messages[['message_sender_id','message_receiver_id']].min(axis=1)
+
+# count elements in string
+airbnb_search_details['count'] = airbnb_search_details['amenities'].str.count(',')+1
 
 # ============================================================
 # 14. BINNING AND CASE-WHEN LOGIC
@@ -441,6 +537,35 @@ choices = ["NO", "FEW", "SOME", "MANY", "A LOT"]
 result["review_category"] = np.select(conditions, choices)
 result = result[["price", "review_category"]]
 
+# use map to apply case when logic
+uber_employees['days_diff'] = (pd.to_datetime('2021-05-01') - uber_employees['hire_date']).dt.days
+uber_employees['years_diff'] = (pd.to_datetime('2021-05-01') - uber_employees['hire_date']).dt.days / 365
+
+uber_employees['still_employed'] = uber_employees['termination_date'].isnull().map({
+    True: 'Yes',
+    False: 'No'
+})
+# min and max are timestamp date not panda df columns, no dt
+result = (max_date - min_date).days
+
+# case when on time
+conditions = [
+    sales_log['timestamp'].dt.hour<12,
+    (sales_log['timestamp'].dt.hour>=12)&(sales_log['timestamp'].dt.hour<=15),
+    sales_log['timestamp'].dt.hour>15
+    ]
+labels = ['morning','early afternoon','late afternoon']
+sales_log['period'] = np.select(conditions,labels,default='unknonwn')
+
+# python default monday as 0
+conditions = (
+    (boi_transactions['time_stamp'].dt.weekday>=0) & 
+    (boi_transactions['time_stamp'].dt.weekday<=4) &
+# python only has isin use ~ to not include
+    ~ (boi_transactions['time_stamp'].dt.date.isin(pd.to_datetime(['2022-12-25','2022-12-26']))) &
+    (boi_transactions['time_stamp'].dt.hour.between(9,15))    
+)
+filter_df['open'] = np.where(conditions,True,False)
 
 # ============================================================
 # 15. FUNNEL, RETENTION, OUTLIERS
@@ -457,6 +582,8 @@ funnel['conversion_rate'].fillna(0) # safe divide
 
 first_seen = df.groupby("user_id")["date"].min().rename("first_date")
 df = df.merge(first_seen, on="user_id")
+# merge on multiple columns
+merge_sales = sf_sales_amount.merge(sf_exchange_rate,left_on=['currency','sales_date'],right_on=['source_currency','date'],how='inner')
 df["days_since_first"] = (df["date"] - df["first_date"]).dt.days
 retention = df.groupby("days_since_first")["user_id"].nunique().reset_index(name="active_users")
 
@@ -468,6 +595,8 @@ outliers = df[
     | (df["revenue"] > q3 + 1.5 * iqr)
 ]
 
+# minute duration diff
+delivery_details['time_diff'] = (delivery_details['delivered_to_consumer_datetime'] - delivery_details['customer_placed_order_datetime']).dt.total_seconds() / 60
 
 # ============================================================
 # 16. CORRELATION
@@ -578,6 +707,9 @@ twitch_sessions["session_start"] = pd.to_datetime(twitch_sessions["session_start
 first_sessions = twitch_sessions.loc[twitch_sessions.groupby("user_id")["session_start"].idxmin()]
 first_viewers = first_sessions[first_sessions["session_type"] == "viewer"][["user_id"]]
 
+# use loc and return values
+final = abs(result.loc[result['gender']=='male','difference'].values[0] - result.loc[result['gender']=='female','difference'].values[0])
+
 streamer_counts = (
     twitch_sessions[twitch_sessions["session_type"] == "streamer"]
     .groupby("user_id")["session_id"]
@@ -589,6 +721,9 @@ result = pd.merge(first_viewers, streamer_counts, on="user_id", how="left").fill
 result["n_sessions"] = result["n_sessions"].astype(int)
 result = result.sort_values(["n_sessions", "user_id"], ascending=[False, True])
 
+# even number, odd number
+even = cookbook_titles[cookbook_titles['page_number'] % 2 == 0]
+odd = cookbook_titles[cookbook_titles['page_number'] % 2 == 1]
 
 # ============================================================
 # 19. MULTI-STEP MERGE EXAMPLE
@@ -666,6 +801,9 @@ result = pd.merge(
 result["min_price"] = result[["cost", "cost_v1", "cost_v2"]].min(axis=1)
 result[~result["min_price"].isna()][["origin", "destination", "min_price"]]
 
+# left join then filter out right ones
+merge_df = user_after_first.merge(user_first_day_product,on=['user_id','product_id'],how='left',indicator=True)
+merge_df[merge_df['_merge']=='left_only']['user_id'].nunique()
 
 # ============================================================
 # 20. MATPLOTLIB BASICS
@@ -720,6 +858,13 @@ plt.grid(axis="y", linestyle="--", alpha=0.3)
 plt.tight_layout()
 plt.show()
 
+# stack bar chart
+plt.bar(df.index, df['clothing'], color='magenta',label='clothing')
+plt.bar(df.index, df['electronics'], color='turquoise',label='electronics')
+plt.bar(df.index, df['accessories'], color='wheat',label='wheat')
+# show legend
+plt.legend()
+plt.show()
 
 # ------------------------------------------------------------
 # 20C. Pie chart
@@ -740,6 +885,11 @@ plt.pie(
 plt.title("Traffic Source Share")
 plt.tight_layout()
 plt.show()
+# donut chart
+plt.pie(df['market_share'],labels=df['brand'],autopct='%1.1f%%',colors=['maroon', 'navy', 'olive'],wedgeprops={'width':0.3})
+# use dict map to assign colors to legend
+colors_list = {'PC': 'sienna', 'Consoles': 'rosybrown', 'Mobile': 'tan'}
+colors = df['platform'].map(colors_list)
 
 
 # ------------------------------------------------------------
@@ -778,6 +928,23 @@ plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
+# where there is no x axis column, use table index
+plt.plot(df_temperatures.index,df_temperatures['city_a'],color='skyblue')
+
+# create stacked line plot
+colors = {
+    'consumer_electronics': 'orange',
+    'home_appliances': 'greenyellow',
+    'personal_care_products': 'deepskyblue',
+}
+df.plot(
+    kind='line',
+    stacked=True,
+    color=[colors[col] for col in df.columns],
+    figsize=(10,6)
+    )
+plt.legend()
+plt.show()
 
 # ------------------------------------------------------------
 # 20F. How to customize charts
@@ -817,3 +984,108 @@ plt.ylabel("ROAS")
 plt.tight_layout()
 plt.show()
 
+
+# ------------------------------------------------------------
+# 20H. Word cloud chart, Area chart, Waterfall chart, Scatter plot, Heatmap, Bubble chart
+# Knowledge:
+# - from wordcloud import WordCloud
+# ------------------------------------------------------------
+# wordcloud chart: clean text
+text = " ".join(feedback)
+keyfeature = {'fast', 'reliable', 'user-friendly', 'excellent', 
+                'intuitive', 'stable', 'improved'}
+# color function define
+def color_func(word, *args, **kwargs):
+    return 'violet' if word.lower() in keyfeature else 'lavender'
+wordcloud = WordCloud(width=1000,height=500,background_color='white').generate(text)
+# Create the graph
+plt.figure(figsize=(10,5))
+plt.imshow(wordcloud.recolor(color_func=color_func),interpolation='bilinear')
+plt.axis('off')
+plt.show()
+
+# create area chart
+df.plot.area(x='year',y='sales',color='lightgreen')
+plt.show()
+# use plt's own area chart function
+plt.fill_between(df['year'],df['sales'],color='lightgreen',step='pre',alpha=0.6)
+plt.plot(df['year'],df['sales'],color='green') # add line chart on top to clarify
+
+# create stacked area chart
+plt.figure(figsize=(12,6))
+plt.stackplot(
+    df['date'],
+    df['electronics'],
+    df['clothing'],
+    df['accessories'],
+    labels=['electronoics','clothing','accessories'],
+    colors=['lightcoral','lightseagreen','lightsalmon']
+)
+plt.legend(loc='upper left')
+
+# Create scatter plot
+color_map =  {'High Productivity': 'purple', 'Low Productivity': 'orange'}
+colors = df['productivity_category'].map(color_map)
+plt.figure(figsize=(10,6))
+plt.scatter(df['productivity'],df['employee_satisfaction'],color=colors)
+plt.show()
+
+colors = {'Participant': 'blue', 'Non-Participant': 'red'}
+color_map = df['participation_label'].map(colors)
+plt.figure(figsize=(10,6))
+# when use map in scatter use c instead of color
+plt.scatter(df['participation_label'],df['academic_score'],c=color_map)
+plt.show()
+
+plt.scatter(df['traffic_congestion'],df['air_pollution'],c=['gray' if x<80 else 'darkred' for x in df['air_pollution']],alpha=0.6)
+# create legend manually
+import matplotlib.patches as mpatches
+low = mpatches.Patch(color='grey',label='Low pollution')
+high = mpatches.Patch(color='darkred',label='High pollution')
+plt.legend(handles=[low,high])
+plt.show()
+
+# Create the heatmap
+import seaborn as sns
+plt.figure(figsize=(12,8)) # this must be before sns.heatmap
+sns.heatmap(df, annot=True, cmap='Greens') 
+plt.show()
+
+# bubble chart and color using function
+plt.scatter(df['population_density'],df['green_space_percentage'],s=df['green_space_percentage'], c=['forestgreen' if x>20 else 'saddlebrown' for x in df['green_space_percentage']]) # s is the bubble size
+
+# create waterfall chart (revenue column is cumulartive revenue)
+plt.figure(figsize=(12,8))
+plt.bar(df['month'],df['revenue'],color='lightgrey')
+plt.bar(df['month'],df['change'],bottom=df['revenue'],color=['tomato' if x>=0 else 'navy' for x in df['change']])
+
+# create waterfall start point
+df['start_value'] = df['profit_change'].cumsum().shift(1).fillna(0)
+plt.figure(figsize=(12,6))
+plt.bar(df['month'],df['profit_change'],bottom=df['start_value'],color=['seagreen' if x>=0 else 'crimson' for x in df['profit_change']])
+
+# contour chart
+contour = plt.contourf(x,y,a, cmap='RdYlGn',levels=10)
+cbar = plt.colorbar(contour)
+plt.contourf(x,y,a,levels=[-100, -75, -50, -25, 0, 25, 50, 75, 100],colors=['wheat', 'navajowhite', 'lightgreen', 'yellowgreen', 'green', 'forestgreen', 'darkgreen'])
+plt.show()
+
+# box plot
+import seaborn as sns
+# create box plot with customized colors using paletter
+color_map = { 'Software Engineer': 'cyan', 'Data Scientist': 'magenta', 'UX Designer': 'yellowgreen' }
+plt.figure(figsize=(10,6))
+sns.boxplot(x='profession',y='annual_salary',data=df,palette=color_map)
+plt.show()
+
+# create gnatt chart using barh
+colors = {'Planning': 'olive', 'operation': 'darkorange', 'Assessment': 'cornflowerblue'}
+df['duration'] = (df['finish'] - df['start']).dt.days
+df['color'] = df['task'].map(colors)
+plt.figure(figsize=(12,8))
+plt.barh(
+    df['task'],
+    df['duration'],
+    left=df['start'],
+    color=df['color']
+    )
