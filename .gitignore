@@ -2,10 +2,12 @@
 *.csv
 *.parquet
 *.zip
+*.tsv000
 # large outputs
 *.png
 *.html
 # environment
 .venv/
+.vscode/
 # mac
 .DS_Store

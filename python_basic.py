@@ -1,20 +1,4 @@
-"""
-Python practice sheet
-
-How to use this file:
-- Treat it as a learning notebook in `.py` form.
-- Run one section at a time instead of running the whole file.
-- Most examples assume the DataFrames already exist.
-
-Main ideas in this file:
-- Core pandas operations for data analysis
-- Common "SQL-like" operations in Python
-- Window-style calculations
-- Practical matplotlib chart examples and customization
-"""
-
 import itertools
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -76,7 +60,6 @@ sf_events[sf_events["record_date"].dt.to_period("M") == "2021-01"]
 cvs_claims[
     (cvs_claims["date_submitted"].dt.to_period("M") == "2021-12")
     & (cvs_claims["date_accepted"].isnull())
-    & (cvs_claims["date_rejected"].isnull())
 ]["claim_id"].nunique()
 
 # Ends with a string.
@@ -88,10 +71,10 @@ partners = postmates_partners[
 ][["id", "name"]]
 
 # create a column with case when / if condition
-allstate_homework['complete_homework'] = allstate_homework['homework_id'].where(allstate_homework['grade'].notnull)
+df['complete_homework'] = df['homework_id'].where(df['grade'].notnull)
 
 # contains 10 digit numbers
-filter_df = customer_responses[customer_responses['customer_response'].str.contains(r'\b\d{10}\b',na=False)]
+filter_df = df[df['customer_response'].str.contains(r'\b\d{10}\b',na=False)]
 
 # ============================================================
 # 3. CREATE OR MODIFY COLUMNS
@@ -110,11 +93,6 @@ df["month"] = df["date"].dt.to_period("M")
 df["session_duration"] = (
     df["session_end"] - df["session_start"]
 ).dt.total_seconds()
-
-df["ctr"] = df["clicks"] / df["impressions"]
-df["cvr"] = df["conversions"] / df["clicks"]
-df["roas"] = df["revenue"] / df["spend"]
-df["cpi"] = df["spend"] / df["installs"]
 df["flag"] = np.where(df["revenue"] > 100, 1, 0)
 
 # Important: wrap long math expressions in parentheses for readability.
@@ -193,10 +171,6 @@ agg_df = (
     .reset_index()
 )
 
-agg_df["ctr"] = agg_df["clicks"] / agg_df["impressions"]
-agg_df["cvr"] = agg_df["conversions"] / agg_df["clicks"]
-agg_df["roas"] = agg_df["revenue"] / agg_df["spend"]
-
 result = dim_customer.groupby("cust_id").size().reset_index(name="count").query("count > 1")
 
 df = transactions_filter.merge(wfm_products, on="product_id", how="inner")
@@ -247,8 +221,6 @@ df = df.merge(other_df, left_on="campaign_id", right_on="id", how="inner")
 
 result = pd.merge(transactions, signups, how="left", on="signup_id")
 
-merged = pd.merge(rc_calls, rc_users, how="left", on="user_id")
-
 
 # ============================================================
 # 8. DATE HANDLING
@@ -272,27 +244,33 @@ sf_exchange_rate["month"] = sf_exchange_rate["month"].dt.strftime("%Y-%m")
 result = sf_exchange_rate[
     sf_exchange_rate["month"].isin(["2020-01", "2020-07"])
 ].sort_values(["source_currency", "date"])
-
+# only return date part from date time
 postmates_orders["date"] = postmates_orders["order_timestamp_utc"].dt.date
 postmates_orders[
     postmates_orders["date"].isin(pd.to_datetime(["2019-03-11", "2019-04-11"]).date)
 ]
 
-result = doordash_delivery[
-    doordash_delivery["customer_placed_order_datetime"].between("2020-05-01", "2020-05-31")
+result = df[
+    df["customer_placed_order_datetime"].between("2020-05-01", "2020-05-31")
 ].groupby("restaurant_id")["order_total"].sum().to_frame("total_order").reset_index()
 
-redfin_call_tracking[redfin_call_tracking['created_on'].dt.hour.between(15,18)]
+df[df['created_on'].dt.hour.between(15,18)]
 
-merge_df['weekday'] = (merge_df['signup_start_date'].dt.weekday + 1) % 7 #sunday as 0, by default python Monady as 0
-
-doordash_delivery['weekday'] = doordash_delivery['customer_placed_order_datetime'].dt.day_name() # Monday, Tuesday, ......
+df['weekday'] = (df['signup_start_date'].dt.weekday + 1) % 7 #sunday as 0, by default python Monady as 0
+# day of month
+dt.day
+# day of year
+dt.dayofyear
+# day of week
+dt.weekday
+# day name
+df['weekday'] = df['customer_placed_order_datetime'].dt.day_name() # Monday, Tuesday, ......
 
 # add xx days to date
-fb_blocked_users['block_end_date'] = fb_blocked_users['block_date'] + pd.to_timedelta(fb_blocked_users['block_duration'], unit='D')
+df['block_end_date'] = df['block_date'] + pd.to_timedelta(df['block_duration'], unit='D')
 
 # format date timestamp to date
-order_details['date'] = order_details['order_timestamp'].dt.date
+df['date'] = df['order_timestamp'].dt.date
 
 # convert month to str when using isin
 group_df[group_df['month'].astype(str).isin(['2020-12','2021-01'])][['account_id','retention_rate']].drop_duplicates()
@@ -300,6 +278,14 @@ group_df[group_df['month'].astype(str).isin(['2020-12','2021-01'])][['account_id
 # month difference using lambda
 group_df['diff'] = (group_df['month'] - group_df['prev_month'].fillna(group_df['month'])).apply(lambda x: x.n)
 group_df[group_df['diff']==1]['driver_id'].drop_duplicates()
+
+# create dates into dataframe
+date_df = pd.DataFrame({
+    'month':pd.date_range('2021-01-01','2021-12-01', freq='MS')
+})
+
+# get week start date, by default Monday = 0
+df['week_start'] = df['ordered_date'] - pd.to_timedelta(df['ordered_date'].dt.weekday, unit='D')
 
 # ============================================================
 # 9. WINDOW-STYLE OPERATIONS
@@ -310,12 +296,11 @@ group_df[group_df['diff']==1]['driver_id'].drop_duplicates()
 # - `cumsum()` creates a running total.
 # ============================================================
 
-amazon_shipment["total_weight"] = (
-    amazon_shipment.groupby("shipment_id")["weight"].transform("sum")
+df["total_weight"] = (
+    df.groupby("shipment_id")["weight"].transform("sum")
 )
 
 df["campaign_total_rev"] = df.groupby("campaign")["revenue"].transform("sum")
-df["rev_share"] = df["revenue"] / df["campaign_total_rev"]
 
 df = df.sort_values(["user_id", "date"])
 df["prev_revenue"] = df.groupby("user_id")["revenue"].shift(1)
@@ -335,7 +320,7 @@ shipment_rank = (
 )
 shipment_rank["rank"] = shipment_rank["total_weight"].rank(method="dense", ascending=False)
 result = shipment_rank[shipment_rank["rank"] == 3][["shipment_id", "total_weight"]]
-result = fact_events[fact_events['client_id'] == 'mobile'].groupby('customer_id')['event_id'].count().reset_index().sort_values(by='event_id',ascending=True)
+result = df[df['client_id'] == 'mobile'].groupby('customer_id')['event_id'].count().reset_index().sort_values(by='event_id',ascending=True)
 result['rank'] = result['event_id'].rank(method='dense',ascending=True)
 result[result['rank']<=2][['customer_id','event_id']]
 
@@ -376,6 +361,7 @@ final = result[result["month"] == "2020-07"][["source_currency", "change"]]
 df = linkedin_customers.merge(linkedin_city,left_on='city_id',right_on='id',how='inner').merge(linkedin_country,left_on='country_id',right_on='id',how='inner')
 df['city_average'] = df.groupby('city_id')['id_x'].transform('nunique')
 mean_val = df.loc[df['city_average']>=1,'city_average'].mean()
+mean_val = df[df['city_average']>=1]['city_average'].mean()
 df['all_average'] = mean_val
 
 # window function on all rows, no transform (transform must use with groupby)
@@ -383,6 +369,9 @@ filter_df['total_customer'] = filter_df['customer_id'].nunique()
 
 # backward fill & forward fill bfill() ffill() 'col': [None, None, 3, None, 5] -> bfill [3,3,3,5,5]
 sf_events['break_session'] = sf_events['if_break'].ffill()
+# handle first row with backfill
+product_engagement['diff'] = np.select([product_engagement['monthly_active_users']>product_engagement['prev'],product_engagement['monthly_active_users']<product_engagement['prev']],[1,-1],default=np.nan)
+product_engagement['diff'] = product_engagement['diff'].bfill()
 
 # ============================================================
 # 10. PERCENT CHANGE, FIRST/LAST, IDXMAX
@@ -399,6 +388,7 @@ growth = (
     .reset_index()
     .sort_values(["account_id", "month"])
 )
+# change rate with previous row
 growth["growth_rate"] = growth.groupby("account_id")["user_id"].pct_change()
 final = growth[growth["month"] == "2021-01"][["account_id", "growth_rate"]].reset_index(drop=True)
 
@@ -436,7 +426,7 @@ pivot = pd.pivot_table(
     index="campaign",
     columns="device",
     values="revenue",
-    aggfunc="sum",
+    aggfunc="sum", #aggfunc='size' no values column work as categorical one hot encode
     fill_value=0,
 )
 
@@ -494,19 +484,23 @@ result_df[result_df['rank_reach']==1][['id','greatest','work_date']].drop_duplic
 df["amenities_clean"] = df["amenities"].str.replace(r"[{}\"]", "", regex=True)
 df["amenities_clean"] = df["amenities_clean"].str.split(",")
 df_explode = df.explode("amenities_clean")
+# remove [], using regex
+facebook_posts['p'] = facebook_posts['post_keywords'].str.replace(r"[\[\]]","",regex=True)
 
 df_explode[
     (df_explode["amenities_clean"].str.contains("parking", case=False, na=False))
     & (df_explode["cleaning_fee"] == False)
 ]["neighbourhood"].unique()
+# contains a list
+df = df[df['facility_name'].str.contains('Cafe|Tea|Juice',case=False,na=False)]
 # concat two columns together
-wfm_transactions['customer_transaction'] = wfm_transactions['customer_id'].astype(str) + '-' + wfm_transactions['transaction_id'].astype(str)
+df['customer_transaction'] = df['customer_id'].astype(str) + '-' + df['transaction_id'].astype(str)
 
 # concat two dataframes
 df = pd.concat([marathon_male,marathon_female])
 
 # smaller value of columns
-whatsapp_messages['small_user'] = whatsapp_messages[['message_sender_id','message_receiver_id']].min(axis=1)
+df['small_user'] = df[['message_sender_id','message_receiver_id']].min(axis=1)
 
 # count elements in string
 airbnb_search_details['count'] = airbnb_search_details['amenities'].str.count(',')+1
@@ -536,7 +530,8 @@ choices = ["NO", "FEW", "SOME", "MANY", "A LOT"]
 
 result["review_category"] = np.select(conditions, choices)
 result = result[["price", "review_category"]]
-
+# need list
+df['risk_score'] = np.select([df['risk_category']=='High Risk'],[1],default=0)
 # use map to apply case when logic
 uber_employees['days_diff'] = (pd.to_datetime('2021-05-01') - uber_employees['hire_date']).dt.days
 uber_employees['years_diff'] = (pd.to_datetime('2021-05-01') - uber_employees['hire_date']).dt.days / 365
@@ -566,6 +561,8 @@ conditions = (
     (boi_transactions['time_stamp'].dt.hour.between(9,15))    
 )
 filter_df['open'] = np.where(conditions,True,False)
+# get week number
+df['week_number'] = df['date'].dt.isocalendar().week
 
 # ============================================================
 # 15. FUNNEL, RETENTION, OUTLIERS
@@ -597,6 +594,16 @@ outliers = df[
 
 # minute duration diff
 delivery_details['time_diff'] = (delivery_details['delivered_to_consumer_datetime'] - delivery_details['customer_placed_order_datetime']).dt.total_seconds() / 60
+
+# quartile use pd.qcut()
+df['quartile']=df.groupby('owner_name')['score'].transform(lambda x: pd.qcut(x,q=min(4,x.nunique()),duplicates='drop'))
+# use quantile
+df = df.groupby(['owner_name'])['score'].agg(
+    q1=lambda x: x.quantile(0.25),
+    q2=lambda x: x.quantile(0.5),
+    q3=lambda x: x.quantile(0.75),
+    q4=lambda x: x.quantile(1)
+    ).reset_index()
 
 # ============================================================
 # 16. CORRELATION
@@ -654,6 +661,12 @@ result = result[result["ntile"] == 1][["restaurant_id", "total_order"]].sort_val
     "total_order", ascending=False
 )
 
+# between must be date type
+from datetime import date
+result = merge_df[merge_df['sign_date'].between(date(2022,1,1),date(2022,1,7))].groupby(['city_id_x','sign_date']).agg(
+    total = ('rider_id','nunique'),
+    complete = ('if_complete','nunique')
+    ).reset_index()
 
 # ============================================================
 # 18. MORE PRACTICE PATTERNS
@@ -725,6 +738,8 @@ result = result.sort_values(["n_sessions", "user_id"], ascending=[False, True])
 even = cookbook_titles[cookbook_titles['page_number'] % 2 == 0]
 odd = cookbook_titles[cookbook_titles['page_number'] % 2 == 1]
 
+# calcualte mode
+df['col1'].mode()
 # ============================================================
 # 19. MULTI-STEP MERGE EXAMPLE
 # Knowledge:
@@ -804,6 +819,12 @@ result[~result["min_price"].isna()][["origin", "destination", "min_price"]]
 # left join then filter out right ones
 merge_df = user_after_first.merge(user_first_day_product,on=['user_id','product_id'],how='left',indicator=True)
 merge_df[merge_df['_merge']=='left_only']['user_id'].nunique()
+
+# sort array
+df['new_content'] = df['new_content'].str.split(' ').apply(sorted)
+
+# cross join
+merge_df = pd.merge(df,df,how='cross').query('poster_x!=poster_y')
 
 # ============================================================
 # 20. MATPLOTLIB BASICS
